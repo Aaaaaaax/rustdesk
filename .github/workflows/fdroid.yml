@@ -14,8 +14,11 @@ jobs:
   # Finds latest release and transforms F-Droid version code from version as follows:
   # X.Y.Z-A => X * 1e6 + Y * 1e4 + Z * 1e2 + A
   update-fdroid-version-file:
+    if: github.repository == 'Aaaaaaax/rustdesk'
     name: Publish RustDesk version file for F-Droid updater
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Generate RustDesk version file
         run: |

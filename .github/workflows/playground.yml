@@ -31,8 +31,11 @@ env:
 
 jobs:
   build-for-macOS:
+    if: github.repository == 'Aaaaaaax/rustdesk'
     name: ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
