@@ -29,8 +29,6 @@ pub const OPTION_TEXTURE_RENDER: &str = "use-texture-render";
 // "failed-*" flips the texture-render default to opt-in on this machine.
 pub const OPTION_TEXTURE_RENDER_HEALTH: &str = "texture-render-health";
 pub const OPTION_ALLOW_D3D_RENDER: &str = "allow-d3d-render";
-pub const OPTION_ENABLE_CHECK_UPDATE: &str = "enable-check-update";
-pub const OPTION_ALLOW_AUTO_UPDATE: &str = "allow-auto-update";
 pub const OPTION_SYNC_AB_WITH_RECENT_SESSIONS: &str = "sync-ab-with-recent-sessions";
 pub const OPTION_SYNC_AB_TAGS: &str = "sync-ab-tags";
 pub const OPTION_FILTER_AB_BY_INTERSECTION: &str = "filter-ab-by-intersection";
@@ -131,7 +129,6 @@ pub const OPTION_ENABLE_UDP_PUNCH: &str = "enable-udp-punch";
 pub const OPTION_ENABLE_IPV6_PUNCH: &str = "enable-ipv6-punch";
 pub const OPTION_ENABLE_PORT_FORWARD_MUX: &str = "enable-port-forward-mux";
 pub const OPTION_ENABLE_WEBRTC: &str = "enable-webrtc";
-pub const OPTION_RELAY_FALLBACK_DELAY: &str = "relay-fallback-delay";
 pub const OPTION_ALLOW_KCP_CC: &str = "allow-kcp-congestion-control";
 pub const OPTION_HIDE_USERNAME_ON_CARD: &str = "hide-username-on-card";
 pub const OPTION_HIDE_HELP_CARDS: &str = "hide-help-cards";
@@ -249,7 +246,6 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_PRE_ELEVATE_SERVICE,
     OPTION_ALLOW_REMOTE_CM_MODIFICATION,
     OPTION_ALLOW_SYNC_CLIPBOARD_BETWEEN_SESSIONS,
-    OPTION_ENABLE_CHECK_UPDATE,
     OPTION_PRINTER_INCOMING_JOB_ACTION,
     OPTION_PRINTER_ALLOW_AUTO_PRINT,
     OPTION_PRINTER_SELECTED_NAME,
@@ -261,7 +257,6 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_ENABLE_IPV6_PUNCH,
     OPTION_ENABLE_PORT_FORWARD_MUX,
     OPTION_ENABLE_WEBRTC,
-    OPTION_RELAY_FALLBACK_DELAY,
     OPTION_TOUCH_MODE,
     OPTION_SHOW_VIRTUAL_MOUSE,
     OPTION_SHOW_VIRTUAL_JOYSTICK,
@@ -322,12 +317,10 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ENABLE_DIRECTX_CAPTURE,
     OPTION_ENABLE_ANDROID_SOFTWARE_ENCODING_HALF_SCALE,
     OPTION_ENABLE_TRUSTED_DEVICES,
-    OPTION_RELAY_SERVER,
     OPTION_ICE_SERVERS,
     OPTION_DISABLE_UDP,
     OPTION_ALLOW_INSECURE_TLS_FALLBACK,
     OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS,
-    OPTION_ALLOW_AUTO_UPDATE,
     OPTION_ALLOW_KCP_CC,
     OPTION_ALLOW_WEBRTC_CC,
 ];

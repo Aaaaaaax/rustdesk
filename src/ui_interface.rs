@@ -24,7 +24,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::common::SOFTWARE_UPDATE_URL;
 #[cfg(feature = "flutter")]
 use crate::hbbs_http::account;
 #[cfg(not(any(target_os = "ios")))]
@@ -112,11 +111,6 @@ pub fn install_me(_options: String, _path: String, _silent: bool, _debug: bool) 
         ));
         std::process::exit(0);
     });
-}
-
-#[inline]
-pub fn update_me(_path: String) {
-    goto_install();
 }
 
 #[inline]
@@ -562,17 +556,6 @@ pub fn set_share_rdp(_enable: bool) {
 }
 
 #[inline]
-pub fn is_installed_lower_version() -> bool {
-    #[cfg(not(windows))]
-    return false;
-    #[cfg(windows)]
-    {
-        let b = crate::platform::windows::get_reg("BuildDate");
-        return crate::BUILD_DATE.cmp(&b).is_gt();
-    }
-}
-
-#[inline]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn get_mouse_time() -> f64 {
     UI_STATUS.lock().unwrap().mouse_time as f64
@@ -744,17 +727,6 @@ pub fn current_is_wayland() -> bool {
     return crate::platform::linux::current_is_wayland();
     #[cfg(not(target_os = "linux"))]
     return false;
-}
-
-#[inline]
-pub fn get_new_version() -> String {
-    (*SOFTWARE_UPDATE_URL
-        .lock()
-        .unwrap()
-        .rsplit('/')
-        .next()
-        .unwrap_or(""))
-    .to_string()
 }
 
 #[inline]
@@ -1239,13 +1211,9 @@ pub fn recent_sessions_updated() -> bool {
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios", feature = "flutter")))]
-pub fn new_remote(id: String, remote_type: String, force_relay: bool) {
+pub fn new_remote(id: String, remote_type: String, _force_relay: bool) {
     let mut lock = CHILDREN.lock().unwrap();
     let mut args = vec![format!("--{}", remote_type), id.clone()];
-    if force_relay {
-        args.push("".to_string()); // password
-        args.push("--relay".to_string());
-    }
     let key = (id.clone(), remote_type.clone());
     if let Some(c) = lock.1.get_mut(&key) {
         if let Ok(Some(_)) = c.try_wait() {

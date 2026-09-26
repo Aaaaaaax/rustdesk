@@ -9,8 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use uuid::Uuid;
-
 use hbb_common::{
     allow_err,
     anyhow::{self, bail},
@@ -52,7 +50,6 @@ fn connection_meta(
 lazy_static::lazy_static! {
     static ref SOLVING_PK_MISMATCH: Mutex<String> = Default::default();
     static ref LAST_MSG: Mutex<(SocketAddr, Instant)> = Mutex::new((SocketAddr::new([0; 4].into(), 0), Instant::now()));
-    static ref LAST_RELAY_MSG: Mutex<(SocketAddr, Instant)> = Mutex::new((SocketAddr::new([0; 4].into(), 0), Instant::now()));
     static ref WEBRTC_ICE_TXS: Mutex<HashMap<String, IceRoute>> = Default::default();
     static ref ICE_DIGEST_STATE: RandomState = Default::default();
 }
@@ -66,7 +63,7 @@ const ICE_DEDUP_WINDOW: usize = 256;
 /// Answerers between an offer and an open data channel. An offer arrives before any password or
 /// accept prompt, and each one builds a peer connection that binds a socket per interface and
 /// runs ICE for up to `CONNECT_TIMEOUT`, where a forged TCP punch costs one connect. Past this
-/// many the offer is declined, and the controller carries on over punch and relay as it does
+/// many the offer is declined, and the controller carries on over direct punching as it does
 /// for a peer without WebRTC. A guard against pathological setup concurrency, above what
 /// legitimate controllers reach at once in the seconds ICE takes; once the channel is open the
 /// connection is one like any other, and the connection layer bounds unauthenticated
@@ -281,7 +278,6 @@ impl RendezvousMediator {
         crate::hbbs_http::sync::start();
         #[cfg(target_os = "windows")]
         if crate::platform::is_installed() && crate::is_server() {
-            crate::updater::start_auto_update();
         }
         check_zombie();
         let server = new_server();
@@ -543,12 +539,8 @@ impl RendezvousMediator {
                     allow_err!(rz.handle_punch_hole(ph, server).await);
                 });
             }
-            Some(rendezvous_message::Union::RequestRelay(rr)) => {
-                let rz = self.clone();
-                let server = server.clone();
-                tokio::spawn(async move {
-                    allow_err!(rz.handle_request_relay(rr, server).await);
-                });
+            Some(rendezvous_message::Union::RequestRelay(_)) => {
+                log::warn!("relay connection requests are disabled; direct connection is required");
             }
             Some(rendezvous_message::Union::FetchLocalAddr(fla)) => {
                 let rz = self.clone();
@@ -669,98 +661,6 @@ impl RendezvousMediator {
         }
     }
 
-    async fn handle_request_relay(&self, rr: RequestRelay, server: ServerPtr) -> ResultType<()> {
-        let addr = AddrMangle::decode(&rr.socket_addr);
-        let last = *LAST_RELAY_MSG.lock().await;
-        *LAST_RELAY_MSG.lock().await = (addr, Instant::now());
-        // skip duplicate relay request messages
-        if last.0 == addr && last.1.elapsed().as_millis() < 100 {
-            return Ok(());
-        }
-        let meta = connection_meta(
-            rr.control_permissions.into_option(),
-            rr.controlled_context.into_option(),
-        );
-
-        self.create_relay(
-            rr.socket_addr.into(),
-            rr.relay_server,
-            rr.uuid,
-            server,
-            rr.secure,
-            false,
-            Default::default(),
-            String::new(),
-            meta,
-        )
-        .await
-    }
-
-    async fn create_relay(
-        &self,
-        socket_addr: Vec<u8>,
-        relay_server: String,
-        uuid: String,
-        server: ServerPtr,
-        secure: bool,
-        initiate: bool,
-        socket_addr_v6: bytes::Bytes,
-        webrtc_sdp_answer: String,
-        meta: ConnectionMeta,
-    ) -> ResultType<()> {
-        let peer_addr = AddrMangle::decode(&socket_addr);
-        log::info!(
-            "create_relay requested from {:?}, relay_server: {}, uuid: {}, secure: {}",
-            peer_addr,
-            relay_server,
-            uuid,
-            secure,
-        );
-
-        let mut socket = connect_tcp(&*self.host, CONNECT_TIMEOUT).await?;
-        // A relay response carrying an answer carries this machine's ICE candidates with it, so
-        // that half goes out only on an encrypted channel. A server that does not complete the
-        // exchange loses the answer, not the relay: the response goes without it, on a fresh
-        // socket since the failed exchange may have consumed a message on this one, and the
-        // controller falls back to its other transports.
-        let mut webrtc_sdp_answer = webrtc_sdp_answer;
-        if !webrtc_sdp_answer.is_empty() {
-            let key = crate::get_key(true).await;
-            if let Err(err) = crate::secure_tcp_required(&mut socket, &key).await {
-                log::warn!("relaying without the WebRTC answer, it cannot be encrypted: {err}");
-                webrtc_sdp_answer = String::new();
-                socket = connect_tcp(&*self.host, CONNECT_TIMEOUT).await?;
-            }
-        }
-
-        let mut msg_out = Message::new();
-        let mut rr = RelayResponse {
-            socket_addr: socket_addr.into(),
-            version: crate::VERSION.to_owned(),
-            socket_addr_v6,
-            webrtc_sdp_answer,
-            ..Default::default()
-        };
-        if initiate {
-            rr.uuid = uuid.clone();
-            rr.relay_server = relay_server.clone();
-            rr.set_id(Config::get_id());
-        }
-        msg_out.set_relay_response(rr);
-        socket.send(&msg_out).await?;
-        crate::create_relay_connection(
-            server,
-            relay_server,
-            uuid,
-            peer_addr,
-            secure,
-            is_ipv4(&self.addr),
-            meta,
-        )
-        .await;
-        Ok(())
-    }
-
     async fn handle_intranet(&self, fla: FetchLocalAddr, server: ServerPtr) -> ResultType<()> {
         let addr = AddrMangle::decode(&fla.socket_addr);
         let last = *LAST_MSG.lock().await;
@@ -770,8 +670,7 @@ impl RendezvousMediator {
             return Ok(());
         }
         let peer_addr_v6 = hbb_common::AddrMangle::decode(&fla.socket_addr_v6);
-        let relay_server = self.get_relay_server(fla.relay_server.clone());
-        let relay = use_ws() || Config::is_proxy();
+        let relay = Config::is_proxy();
         let mut socket_addr_v6 = Default::default();
         let meta = connection_meta(
             fla.control_permissions.clone().into_option(),
@@ -792,44 +691,29 @@ impl RendezvousMediator {
                 .handle_intranet_(
                     fla.clone(),
                     server.clone(),
-                    relay_server.clone(),
                     socket_addr_v6.clone(),
                     meta.clone(),
                 )
                 .await
             {
-                log::debug!("Failed to handle intranet: {:?}, will try relay", err);
+                log::debug!("Failed to handle direct intranet connection: {:?}", err);
             } else {
                 return Ok(());
             }
         }
-        let uuid = Uuid::new_v4().to_string();
-        self.create_relay(
-            fla.socket_addr.into(),
-            relay_server,
-            uuid,
-            server,
-            true,
-            true,
-            socket_addr_v6,
-            String::new(),
-            meta,
-        )
-        .await
+        bail!("Failed to establish a direct intranet connection")
     }
 
     async fn handle_intranet_(
         &self,
         fla: FetchLocalAddr,
         server: ServerPtr,
-        relay_server: String,
         socket_addr_v6: bytes::Bytes,
         meta: ConnectionMeta,
     ) -> ResultType<()> {
         let peer_addr = AddrMangle::decode(&fla.socket_addr);
         log::debug!("Handle intranet from {:?}", peer_addr);
-        // The listen this opens waits for the peer like a TCP punch and is declined like one; the
-        // caller then relays, as it does when the listen fails for any other reason.
+        // The listen this opens waits for the peer like a TCP punch and is declined like one.
         let Some(slot) = TCP_PUNCHES.take() else {
             hbb_common::throttled_log!(
                 PUNCH_LOG_INTERVAL,
@@ -849,7 +733,6 @@ impl RendezvousMediator {
             id: Config::get_id(),
             socket_addr: AddrMangle::encode(peer_addr).into(),
             local_addr: AddrMangle::encode(local_addr).into(),
-            relay_server,
             version: crate::VERSION.to_owned(),
             socket_addr_v6,
             ..Default::default()
@@ -861,7 +744,7 @@ impl RendezvousMediator {
     }
 
     /// Build the WebRTC answerer for a punch-hole offer and return the SDP answer that rides in
-    /// the punch reply (PunchHoleSent / RelayResponse).
+    /// the punch reply (PunchHoleSent).
     ///
     /// Awaited inline on the punch-reply path, which only holds because everything here is local
     /// (pc + keygen + SDP; trickle means the answer carries no candidates). Keep network I/O out
@@ -869,7 +752,6 @@ impl RendezvousMediator {
     async fn spawn_webrtc_answerer(
         &self,
         ph: &PunchHole,
-        relay_only_ice: bool,
         server: ServerPtr,
         peer_addr: SocketAddr,
         meta: ConnectionMeta,
@@ -883,8 +765,7 @@ impl RendezvousMediator {
             );
             return Ok(String::new());
         };
-        let mut stream =
-            WebRTCStream::new(&ph.webrtc_sdp_offer, relay_only_ice, CONNECT_TIMEOUT).await?;
+        let mut stream = WebRTCStream::new(&ph.webrtc_sdp_offer, false, CONNECT_TIMEOUT).await?;
         let answer = stream.local_endpoint().to_owned();
         let session_key = stream.session_key().to_owned();
         let return_route = ph.socket_addr.clone();
@@ -1024,6 +905,11 @@ impl RendezvousMediator {
                 stream.close_detached_with(slot);
                 return;
             }
+            if stream.is_relayed().await.unwrap_or(true) {
+                log::warn!("WebRTC selected a relay path; direct connection is required");
+                stream.close_detached_with(slot);
+                return;
+            }
             // The channel is open: from here the session is a connection like any other, and the
             // connection layer's own limits apply to it.
             drop(slot);
@@ -1059,29 +945,21 @@ impl RendezvousMediator {
             return Ok(());
         }
         let peer_addr_v6 = hbb_common::AddrMangle::decode(&ph.socket_addr_v6);
-        let local_proxy = use_ws() || Config::is_proxy();
-        let relay = local_proxy || ph.force_relay;
+        let relay = Config::is_proxy();
         let mut socket_addr_v6 = Default::default();
         let meta = connection_meta(
             ph.control_permissions.clone().into_option(),
             ph.controlled_context.clone().into_option(),
         );
-        // The controller's force_relay alone does not say whether ICE must be Relay-only; its
-        // offer envelope does. `ice_policy: "all"` means the relay was forced by the transport
-        // (ws), so answer with full ICE and let a direct pair form.
-        let webrtc_relay_only =
-            ph.force_relay && !WebRTCStream::endpoint_declares_all_ice(&ph.webrtc_sdp_offer);
         // No enable-webrtc check here: it is LocalConfig, which the UI process writes and never
         // syncs over IPC, so this (server) process would read the private-server default of "N"
         // and refuse to answer in exactly the self-hosted deployments the transport is for.
         // A proxy still rules it out — ICE would bypass it and leak the real IP.
         let webrtc_viable = !ph.webrtc_sdp_offer.is_empty()
-            && !Config::is_proxy()
-            && (!webrtc_relay_only || WebRTCStream::has_turn_server());
+            && !Config::is_proxy();
         let webrtc_sdp_answer = if webrtc_viable {
             self.spawn_webrtc_answerer(
                 &ph,
-                webrtc_relay_only,
                 server.clone(),
                 peer_addr,
                 meta.clone(),
@@ -1094,17 +972,8 @@ impl RendezvousMediator {
         } else {
             String::new()
         };
-        // Whether the v4 legs relay is known here, and decides whether a v4 place is taken at
-        // all: the relay branch below runs the whole session, and a place held across it would
-        // let ordinary relay traffic use the pool up. The v6 punch is not relayed with them - a
-        // symmetric NAT on v4 says nothing about v6 - and its place is taken after the v4 one,
-        // or it could be the last and leave the punch the peer counts on with none.
-        let relay_v4 = ph.nat_type.enum_value() == Ok(NatType::SYMMETRIC)
-            || Config::get_nat_type() == NatType::SYMMETRIC as i32
-            || relay
-            || (config::is_disable_tcp_listen() && ph.udp_port <= 0);
-        let punch_udp = !relay_v4 && ph.udp_port > 0;
-        let punch_tcp = !relay_v4 && ph.udp_port <= 0 && ph.webrtc_sdp_offer.is_empty();
+        let punch_udp = ph.udp_port > 0;
+        let punch_tcp = ph.udp_port <= 0 && ph.webrtc_sdp_offer.is_empty();
         let punch_v6 = peer_addr_v6.port() > 0 && !relay;
         let (slot_udp, slot_v6) = UDP_PUNCHES.take_pair(punch_udp, punch_v6);
         let slot_tcp = punch_tcp.then(|| TCP_PUNCHES.take()).flatten();
@@ -1118,35 +987,11 @@ impl RendezvousMediator {
             )
             .await;
         }
-        let relay_server = self.get_relay_server(ph.relay_server);
-        // for ensure, websocket go relay directly
-        // A symmetric NAT relays the legacy transports but deliberately not WebRTC: the answer
-        // built above rides along on the relay request, and ICE probes the candidate pairs rather
-        // than trusting this classification, so a direct WebRTC pair can still form on a
-        // connection this branch has already called relay-only. Do not gate the answerer on
-        // nat_type to make the two agree.
-        if relay_v4 {
-            let uuid = Uuid::new_v4().to_string();
-            return self
-                .create_relay(
-                    ph.socket_addr.into(),
-                    relay_server,
-                    uuid,
-                    server,
-                    true,
-                    true,
-                    socket_addr_v6.clone(),
-                    webrtc_sdp_answer.clone(),
-                    meta,
-                )
-                .await;
-        }
         use hbb_common::protobuf::Enum;
         let nat_type = NatType::from_i32(Config::get_nat_type()).unwrap_or(NatType::UNKNOWN_NAT);
         let msg_punch = PunchHoleSent {
             socket_addr: ph.socket_addr,
             id: Config::get_id(),
-            relay_server,
             nat_type: nat_type.into(),
             version: crate::VERSION.to_owned(),
             socket_addr_v6,
@@ -1329,16 +1174,6 @@ impl RendezvousMediator {
         Ok(())
     }
 
-    fn get_relay_server(&self, provided_by_rendezvous_server: String) -> String {
-        let mut relay_server = Config::get_option("relay-server");
-        if relay_server.is_empty() {
-            relay_server = provided_by_rendezvous_server;
-        }
-        if relay_server.is_empty() {
-            relay_server = crate::increase_port(&self.host, 1);
-        }
-        relay_server
-    }
 }
 
 fn get_direct_port() -> i32 {

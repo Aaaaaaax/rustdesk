@@ -720,38 +720,6 @@ abstract class BasePeerCard extends StatelessWidget {
   _openInWindowsAction(String id) async => await _openNewConnInAction(
       id, 'Open in new window', kOptionOpenInWindows);
 
-  // ignore: unused_element
-  _openNewConnInOptAction(String id) async =>
-      mainGetLocalBoolOptionSync(kOptionOpenNewConnInTabs)
-          ? await _openInWindowsAction(id)
-          : await _openInTabsAction(id);
-
-  @protected
-  Future<bool> _isForceAlwaysRelay(String id) async {
-    return option2bool(kOptionForceAlwaysRelay,
-        (await bind.mainGetPeerOption(id: id, key: kOptionForceAlwaysRelay)));
-  }
-
-  @protected
-  Future<MenuEntryBase<String>> _forceAlwaysRelayAction(String id) async {
-    return MenuEntrySwitch<String>(
-      switchType: SwitchType.scheckbox,
-      text: translate('Always connect via relay'),
-      getter: () async {
-        return await _isForceAlwaysRelay(id);
-      },
-      setter: (bool v) async {
-        await bind.mainSetPeerOption(
-            id: id,
-            key: kOptionForceAlwaysRelay,
-            value: bool2option(kOptionForceAlwaysRelay, v));
-        showToast(translate('Successful'));
-      },
-      padding: menuPadding,
-      dismissOnClicked: true,
-    );
-  }
-
   @protected
   MenuEntryBase<String> _renameAction(String id) {
     return MenuEntryButton<String>(
@@ -983,9 +951,6 @@ class RecentPeerCard extends BasePeerCard {
       menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    if (!isWeb) {
-      menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
       menuItems.add(_rdpAction(context, peer.id));
     }
@@ -1046,9 +1011,6 @@ class FavoritePeerCard extends BasePeerCard {
       menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    if (!isWeb) {
-      menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
       menuItems.add(_rdpAction(context, peer.id));
     }
@@ -1108,9 +1070,6 @@ class DiscoveredPeerCard extends BasePeerCard {
       menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    if (!isWeb) {
-      menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
       menuItems.add(_rdpAction(context, peer.id));
     }
@@ -1165,9 +1124,6 @@ class AddressBookPeerCard extends BasePeerCard {
       menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    if (!isWeb) {
-      menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
       menuItems.add(_rdpAction(context, peer.id));
     }
@@ -1322,9 +1278,6 @@ class MyGroupPeerCard extends BasePeerCard {
       menuItems.add(_tcpTunnelingAction(context));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    if (!isWeb) {
-      menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
     if (isWindows && peer.platform == kPeerPlatformWindows) {
       menuItems.add(_rdpAction(context, peer.id));
     }

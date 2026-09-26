@@ -71,20 +71,14 @@ void showServerSettingsWithValue(
     void Function(VoidCallback)? upSetState) async {
   var isInProgress = false;
   final idCtrl = TextEditingController(text: serverConfig.idServer);
-  final relayCtrl = TextEditingController(text: serverConfig.relayServer);
   final apiCtrl = TextEditingController(text: serverConfig.apiServer);
   final keyCtrl = TextEditingController(text: serverConfig.key);
 
   RxString idServerMsg = ''.obs;
-  RxString relayServerMsg = ''.obs;
   RxString apiServerMsg = ''.obs;
 
-  final controllers = [idCtrl, relayCtrl, apiCtrl, keyCtrl];
-  final errMsgs = [
-    idServerMsg,
-    relayServerMsg,
-    apiServerMsg,
-  ];
+  final controllers = [idCtrl, apiCtrl, keyCtrl];
+  final errMsgs = [idServerMsg, apiServerMsg];
 
   dialogManager.show((setState, close, context) {
     Future<bool> submit() async {
@@ -96,7 +90,6 @@ void showServerSettingsWithValue(
           errMsgs,
           ServerConfig(
               idServer: idCtrl.text.trim(),
-              relayServer: relayCtrl.text.trim(),
               apiServer: apiCtrl.text.trim(),
               key: keyCtrl.text.trim()));
       setState(() {
@@ -143,7 +136,7 @@ void showServerSettingsWithValue(
     return CustomAlertDialog(
       title: Row(
         children: [
-          Expanded(child: Text(translate('ID/Relay Server'))),
+          Expanded(child: Text(translate('ID Server'))),
           ...ServerConfigImportExportWidgets(controllers, errMsgs),
         ],
       ),
@@ -156,11 +149,6 @@ void showServerSettingsWithValue(
                   buildField(translate('ID Server'), idCtrl, idServerMsg.value,
                       autofocus: true),
                   SizedBox(height: 8),
-                  if (!isIOS && !isWeb) ...[
-                    buildField(translate('Relay Server'), relayCtrl,
-                        relayServerMsg.value),
-                    SizedBox(height: 8),
-                  ],
                   buildField(
                     translate('API Server'),
                     apiCtrl,

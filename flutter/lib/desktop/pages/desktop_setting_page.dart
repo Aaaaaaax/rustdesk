@@ -482,8 +482,6 @@ class _GeneralState extends State<_General> {
   Widget other() {
     final incomingOnly = bind.isIncomingOnly();
     final outgoingOnly = bind.isOutgoingOnly();
-    final showAutoUpdate = (isWindows && bind.mainIsInstalled()) ||
-    (isMacOS && bind.mainIsInstalled() && bind.mainIsInstalledDaemon(prompt: false) && !bind.isCustomClient());
     final children = <Widget>[
       if (!isWeb && !incomingOnly)
         _OptionCheckBox(context, 'Confirm before closing multiple tabs',
@@ -551,20 +549,6 @@ class _GeneralState extends State<_General> {
             ),
           ),
       ],
-      if (!isWeb && !bind.isCustomClient())
-        _OptionCheckBox(
-          context,
-          'Check for software update on startup',
-          kOptionEnableCheckUpdate,
-          isServer: false,
-        ),
-      if (showAutoUpdate)
-        _OptionCheckBox(
-          context,
-          'Auto update',
-          kOptionAllowAutoUpdate,
-          isServer: true,
-        ),
       if (isWindows && !outgoingOnly)
         _OptionCheckBox(
           context,
@@ -591,7 +575,13 @@ class _GeneralState extends State<_General> {
           isServer: false,
         ),
       ],
-      if (!incomingOnly) ...webrtcOptions(context),
+      if (!incomingOnly)
+        _OptionCheckBox(
+          context,
+          'Enable WebRTC P2P connection',
+          kOptionEnableWebrtc,
+          isServer: false,
+        ),
       if (!isWeb && !incomingOnly)
         Tooltip(
           message: translate('sync-clipboard-between-sessions-tip'),
@@ -882,84 +872,6 @@ class _GeneralState extends State<_General> {
     });
   }
 
-  // How long an already-connected relay is held back to give the direct WebRTC
-  // attempt a chance to win. It only means anything while WebRTC is on, so it
-  // follows the checkbox as an indented sub-option and is hidden outright when
-  // the box is clear — the shape `directIp` uses for its port.
-  List<Widget> webrtcOptions(BuildContext context) {
-    final stored = bind.mainGetLocalOption(key: kOptionRelayFallbackDelay);
-    final controller = TextEditingController(text: stored);
-    // What the field holds against what is saved. Apply is offered only while
-    // the two differ, so an untouched field shows no button at all, and neither
-    // does one typed back to its saved value or cleared when nothing was saved
-    // — the state an "edited" flag alone would still call dirty.
-    final typed = RxString(stored);
-    final saved = RxString(stored);
-    return [
-      _OptionCheckBox(
-        context,
-        'Enable WebRTC P2P connection',
-        kOptionEnableWebrtc,
-        isServer: false,
-        update: (_) => setState(() {}),
-      ),
-      () {
-        final enabled = mainGetLocalBoolOptionSync(kOptionEnableWebrtc);
-        final isOptFixed = isOptionFixed(kOptionRelayFallbackDelay);
-        return Offstage(
-          offstage: !enabled,
-          child: Tooltip(
-            message: translate('relay-fallback-delay-tip'),
-            child: _SubLabeledWidget(
-              context,
-              'Relay fallback delay in seconds',
-              Row(children: [
-                SizedBox(
-                  width: 95,
-                  child: TextField(
-                    controller: controller,
-                    enabled: enabled && !isOptFixed,
-                    onChanged: (v) => typed.value = v,
-                    inputFormatters: [
-                      // Seconds, at most one decimal. Clearing the field is
-                      // allowed and restores the built-in default.
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^([0-9]|[1-9][0-9])(\.[0-9]?)?$')),
-                    ],
-                    decoration: const InputDecoration(
-                      hintText: '2.5',
-                      contentPadding:
-                          EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                    ),
-                  ).workaroundFreezeLinuxMint().marginOnly(right: 15),
-                ),
-                Obx(() => Offstage(
-                      offstage: typed.value.trim() == saved.value.trim(),
-                      child: ElevatedButton(
-                        onPressed: enabled &&
-                                !isOptFixed &&
-                                !typed.value.trim().endsWith('.') &&
-                                double.tryParse(typed.value.trim()) != 0
-                            ? () async {
-                                final v = controller.text.trim();
-                                await bind.mainSetLocalOption(
-                                    key: kOptionRelayFallbackDelay, value: v);
-                                if (controller.text != v) controller.text = v;
-                                typed.value = v;
-                                saved.value = v;
-                              }
-                            : null,
-                        child: Text(translate('Apply')),
-                      ),
-                    ))
-              ]),
-              enabled: enabled && !isOptFixed,
-            ),
-          ),
-        );
-      }(),
-    ];
-  }
 }
 
 enum _AccessMode {
@@ -1865,7 +1777,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
               if (!hideServer)
                 listTile(
                   icon: Icons.dns_outlined,
-                  title: 'ID/Relay Server',
+                   title: 'ID Server',
                   onTap: () => showServerSettings(gFFI.dialogManager, setState),
                 ),
               if (!hideProxy && !hideServer) divider,

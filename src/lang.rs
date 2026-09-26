@@ -128,46 +128,12 @@ pub(crate) fn is_cjk_lang(lang_or_locale: &str) -> bool {
     matches!(lang.as_str(), "zh" | "ja" | "ko")
 }
 
-fn resolve_lang(saved_lang: &str, locale: &str, cjk_fallback: bool) -> String {
-    let locale = locale.to_lowercase();
-    let mut lang = saved_lang.to_lowercase();
-    if cjk_fallback && is_cjk_lang(&lang) {
-        return "en".to_owned();
-    }
-    if lang.is_empty() {
-        // zh_CN on Linux, zh-Hans-CN on mac, zh_CN_#Hans on Android
-        if locale.starts_with("zh") {
-            lang = (if locale.contains("tw") {
-                "zh-tw"
-            } else {
-                "zh-cn"
-            })
-            .to_owned();
-        }
-    }
-    if lang.is_empty() {
-        // pt_PT on Linux, pt-PT on mac, pt_PT on Android.
-        // Per CLDR locale inheritance, every Portuguese-speaking locale
-        // besides bare "pt" and Brazil's own variants (pt-BR/pt_BR) has
-        // pt-PT as its parent (Angola, Mozambique, Cape Verde, etc.),
-        // so it should resolve to European Portuguese.
-        if locale.starts_with("pt") {
-            lang = (if locale == "pt" || locale.starts_with("pt-br") || locale.starts_with("pt_br") {
-                "pt-br"
-            } else {
-                "pt-pt"
-            })
-            .to_owned();
-        }
-    }
-    if lang.is_empty() {
-        lang = locale
-            .split("-")
-            .next()
-            .map(|x| x.split("_").next().unwrap_or_default())
-            .unwrap_or_default()
-            .to_owned();
-    }
+fn resolve_lang(saved_lang: &str, _locale: &str, cjk_fallback: bool) -> String {
+    let lang = if saved_lang.is_empty() || saved_lang.eq_ignore_ascii_case("default") {
+        "zh-cn".to_owned()
+    } else {
+        saved_lang.to_lowercase()
+    };
     if cjk_fallback && is_cjk_lang(&lang) {
         "en".to_owned()
     } else {
@@ -360,20 +326,18 @@ mod test {
         use super::resolve_lang as f;
 
         assert_eq!(f("zh-cn", "en-US", false), "zh-cn");
-        assert_eq!(f("", "zh_TW", false), "zh-tw");
-        assert_eq!(f("", "ja-JP", false), "ja");
+        assert_eq!(f("", "zh_TW", false), "zh-cn");
+        assert_eq!(f("", "ja-JP", false), "zh-cn");
     }
 
     #[test]
-    fn test_resolve_lang_detects_pt_pt_and_pt_br_from_locale() {
+    fn test_resolve_lang_defaults_to_simplified_chinese() {
         use super::resolve_lang as f;
 
-        assert_eq!(f("", "pt-PT", false), "pt-pt");
-        assert_eq!(f("", "pt_PT", false), "pt-pt");
-        assert_eq!(f("", "pt-BR", false), "pt-br");
-        assert_eq!(f("", "pt_BR", false), "pt-br");
-        assert_eq!(f("", "pt-AO", false), "pt-pt");
-        assert_eq!(f("", "pt-MZ", false), "pt-pt");
+        assert_eq!(f("", "pt-PT", false), "zh-cn");
+        assert_eq!(f("", "en-US", false), "zh-cn");
+        assert_eq!(f("", "zh-CN", false), "zh-cn");
+        assert_eq!(f("default", "en-US", false), "zh-cn");
     }
 
     #[test]

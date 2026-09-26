@@ -952,8 +952,8 @@ class FfiModel with ChangeNotifier {
       showWaitUacDialog(sessionId, dialogManager, type);
     } else if (type == 'elevation-error') {
       showElevationError(sessionId, type, title, text, dialogManager);
-    } else if (type == 'relay-hint' || type == 'relay-hint2') {
-      showRelayHintDialog(sessionId, type, title, text, dialogManager, peerId);
+    } else if (type == 'direct-hint' || type == 'direct-hint2') {
+      showDirectHintDialog(sessionId, type, title, text, dialogManager, peerId);
     } else if (text == kMsgboxTextWaitingForImage) {
       showConnectedWaitingForImage(dialogManager, sessionId, type, title, text);
     } else if (title == 'Privacy mode') {
@@ -1119,18 +1119,14 @@ class FfiModel with ChangeNotifier {
         onCancel: closeConnection);
   }
 
-  Future<void> showRelayHintDialog(
+  Future<void> showDirectHintDialog(
       SessionID sessionId,
       String type,
       String title,
       String text,
       OverlayDialogManager dialogManager,
       String peerId) async {
-    var hint = "\n\n${translate('relay_hint_tip')}";
-    if (text.contains("10054") || text.contains("104")) {
-      hint = "";
-    }
-    final text2 = "${translate(text)}$hint";
+    final text2 = translate(text);
 
     if (parent.target != null &&
         allowAskForNoteAtEndOfConnection(parent.target, false) &&
@@ -1149,25 +1145,13 @@ class FfiModel with ChangeNotifier {
         close();
       }
 
-      final style =
-          ElevatedButton.styleFrom(backgroundColor: Colors.green[700]);
-
       return CustomAlertDialog(
         title: null,
         content: msgboxContent(type, title, text2),
         actions: [
           dialogButton('Close', onPressed: onClose, isOutline: true),
-          if (type == 'relay-hint')
-            dialogButton('Connect via relay',
-                onPressed: () => reconnect(dialogManager, sessionId, true),
-                buttonStyle: style,
-                isOutline: true),
           dialogButton('Retry',
               onPressed: () => reconnect(dialogManager, sessionId, false)),
-          if (type == 'relay-hint2')
-            dialogButton('Connect via relay',
-                onPressed: () => reconnect(dialogManager, sessionId, true),
-                buttonStyle: style),
         ],
         onCancel: onClose,
       );

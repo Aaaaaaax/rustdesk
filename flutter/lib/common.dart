@@ -1619,8 +1619,7 @@ bool option2bool(String option, String value) {
     res = value != "N";
   } else if (option.startsWith("allow-") ||
       option == kOptionStopService ||
-      option == kOptionDirectServer ||
-      option == kOptionForceAlwaysRelay) {
+      option == kOptionDirectServer) {
     res = value == "Y";
   } else {
     // "" is true
@@ -1638,8 +1637,7 @@ String bool2option(String option, bool b) {
     res = b ? defaultOptionYes : 'N';
   } else if (option.startsWith('allow-') ||
       option == kOptionStopService ||
-      option == kOptionDirectServer ||
-      option == kOptionForceAlwaysRelay) {
+      option == kOptionDirectServer) {
     res = b ? 'Y' : defaultOptionNo;
   } else {
     res = b ? 'Y' : 'N';
@@ -2920,14 +2918,11 @@ bool get isWin10 => windowsBuildNumber.windowsVersion == WindowsTarget.w10;
 
 class ServerConfig {
   late String idServer;
-  late String relayServer;
   late String apiServer;
   late String key;
 
-  ServerConfig(
-      {String? idServer, String? relayServer, String? apiServer, String? key}) {
+  ServerConfig({String? idServer, String? apiServer, String? key}) {
     this.idServer = idServer?.trim() ?? '';
-    this.relayServer = relayServer?.trim() ?? '';
     this.apiServer = apiServer?.trim() ?? '';
     this.key = key?.trim() ?? '';
   }
@@ -2946,7 +2941,6 @@ class ServerConfig {
       json = jsonDecode(utf8.decode(bytes, allowMalformed: true));
     }
     idServer = json['host'] ?? '';
-    relayServer = json['relay'] ?? '';
     apiServer = json['api'] ?? '';
     key = json['key'] ?? '';
   }
@@ -2956,7 +2950,6 @@ class ServerConfig {
   String encode() {
     Map<String, String> config = {};
     config['host'] = idServer.trim();
-    config['relay'] = relayServer.trim();
     config['api'] = apiServer.trim();
     config['key'] = key.trim();
     return base64UrlEncode(Uint8List.fromList(jsonEncode(config).codeUnits))
@@ -2968,7 +2961,6 @@ class ServerConfig {
   /// from local options
   ServerConfig.fromOptions(Map<String, dynamic> options)
       : idServer = options['custom-rendezvous-server'] ?? "",
-        relayServer = options['relay-server'] ?? "",
         apiServer = options['api-server'] ?? "",
         key = options['key'] ?? "";
 }
@@ -3554,9 +3546,6 @@ importConfig(List<TextEditingController>? controllers, List<RxString>? errMsgs,
   if (text != null && text.isNotEmpty) {
     try {
       final sc = ServerConfig.decode(text);
-      if (isWeb || isIOS) {
-        sc.relayServer = '';
-      }
       if (sc.idServer.isNotEmpty) {
         Future<bool> success = setServerConfig(controllers, errMsgs, sc);
         success.then((value) {
@@ -3591,14 +3580,12 @@ Future<bool> setServerConfig(
   }
 
   config.idServer = removeEndSlash(config.idServer.trim());
-  config.relayServer = removeEndSlash(config.relayServer.trim());
   config.apiServer = removeEndSlash(config.apiServer.trim());
   config.key = config.key.trim();
   if (controllers != null) {
     controllers[0].text = config.idServer;
-    controllers[1].text = config.relayServer;
-    controllers[2].text = config.apiServer;
-    controllers[3].text = config.key;
+    controllers[1].text = config.apiServer;
+    controllers[2].text = config.key;
   }
   // id
   if (config.idServer.isNotEmpty && errMsgs != null) {
@@ -3608,19 +3595,11 @@ Future<bool> setServerConfig(
       return false;
     }
   }
-  // relay
-  if (config.relayServer.isNotEmpty && errMsgs != null) {
-    errMsgs[1].value = translate(await bind.mainTestIfValidServer(
-        server: config.relayServer, testWithProxy: true));
-    if (errMsgs[1].isNotEmpty) {
-      return false;
-    }
-  }
   // api
   if (config.apiServer.isNotEmpty && errMsgs != null) {
     if (!config.apiServer.startsWith('http://') &&
         !config.apiServer.startsWith('https://')) {
-      errMsgs[2].value =
+      errMsgs[1].value =
           '${translate("API Server")}: ${translate("invalid_http")}';
       return false;
     }
@@ -3630,7 +3609,6 @@ Future<bool> setServerConfig(
   // should set one by one
   await bind.mainSetOption(
       key: 'custom-rendezvous-server', value: config.idServer);
-  await bind.mainSetOption(key: 'relay-server', value: config.relayServer);
   await bind.mainSetOption(key: 'api-server', value: config.apiServer);
   await bind.mainSetOption(key: 'key', value: config.key);
   final newApiServer = await bind.mainGetApiServer();
@@ -3984,7 +3962,7 @@ bool get isCustomClient {
   return _isCustomClient!;
 }
 
-get defaultOptionLang => isCustomClient ? 'default' : '';
+get defaultOptionLang => 'zh-cn';
 get defaultOptionTheme => isCustomClient ? 'system' : '';
 get defaultOptionYes => isCustomClient ? 'Y' : '';
 get defaultOptionNo => isCustomClient ? 'N' : '';
@@ -4063,23 +4041,6 @@ List<SubWindowResizeEdge>? get subWindowManagerEnableResizeEdges => isWindows
 
 void earlyAssert() {
   assert('\1' == '1');
-}
-
-void checkUpdate() {
-  if (!isWeb) {
-    if (!bind.isCustomClient()) {
-      platformFFI.registerEventHandler(
-          kCheckSoftwareUpdateFinish, kCheckSoftwareUpdateFinish,
-          (Map<String, dynamic> evt) async {
-        if (evt['url'] is String) {
-          stateGlobal.updateUrl.value = evt['url'];
-        }
-      });
-      Timer(const Duration(seconds: 1), () async {
-        bind.mainGetSoftwareUpdateUrl();
-      });
-    }
-  }
 }
 
 // https://github.com/flutter/flutter/issues/153560#issuecomment-2497160535

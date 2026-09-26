@@ -1204,10 +1204,6 @@ class RustdeskImpl {
     return Future(() => mainGetLocalOption(key: 'last_remote_id'));
   }
 
-  Future<void> mainGetSoftwareUpdateUrl({dynamic hint}) {
-    throw UnimplementedError("mainGetSoftwareUpdateUrl");
-  }
-
   Future<String> mainGetHomeDir({dynamic hint}) {
     return Future.value('');
   }
@@ -1540,10 +1536,6 @@ class RustdeskImpl {
     throw UnimplementedError("mainIsInstalled");
   }
 
-  bool mainIsInstalledLowerVersion({dynamic hint}) {
-    throw UnimplementedError("mainIsInstalledLowerVersion");
-  }
-
   bool mainIsInstalledDaemon({required bool prompt, dynamic hint}) {
     throw UnimplementedError("mainIsInstalledDaemon");
   }
@@ -1570,14 +1562,6 @@ class RustdeskImpl {
 
   bool mainGotoInstall({dynamic hint}) {
     throw UnimplementedError("mainGotoInstall");
-  }
-
-  String mainGetNewVersion({dynamic hint}) {
-    throw UnimplementedError("mainGetNewVersion");
-  }
-
-  bool mainUpdateMe({dynamic hint}) {
-    throw UnimplementedError("mainUpdateMe");
   }
 
   Future<void> setCurSessionId({required UuidValue sessionId, dynamic hint}) {

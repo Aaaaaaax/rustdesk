@@ -1719,19 +1719,12 @@ Future<bool?> _showConnEndAuditDialogCloseCanceled({
     final buttons = [
       dialogButton('OK', onPressed: isInProgress ? null : submit)
     ];
-    if (type == 'relay-hint' || type == 'relay-hint2') {
+    if (type == 'direct-hint' || type == 'direct-hint2') {
       buttons.add(dialogButton('Retry', onPressed: () async {
         await set();
         close(true);
         ffi.ffiModel.reconnect(ffi.dialogManager, ffi.sessionId, false);
       }));
-      if (type == 'relay-hint2') {
-        buttons.add(dialogButton('Connect via relay', onPressed: () async {
-          await set();
-          close(true);
-          ffi.ffiModel.reconnect(ffi.dialogManager, ffi.sessionId, true);
-        }));
-      }
     }
     if (closedByControlling) {
       buttons.add(dialogButton('Cancel',
